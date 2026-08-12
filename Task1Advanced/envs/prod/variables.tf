@@ -62,9 +62,9 @@ variable "vm_name" {
   description = "Name of the VM instance."
 }
 
-variable "image_id" {
+variable "image_family" {
   type        = string
-  description = "OS image ID for the boot disk."
+  description = "OS image family for the boot disk (e.g. ubuntu-2204-lts)."
 }
 
 variable "cores" {
@@ -81,17 +81,6 @@ variable "core_fraction" {
   type        = number
   description = "Guaranteed vCPU performance percentage."
   default     = 100
-}
-
-variable "disk_size" {
-  type        = number
-  description = "Boot disk size in GB."
-}
-
-variable "disk_type" {
-  type        = string
-  description = "Boot disk type (network-hdd / network-ssd)."
-  default     = "network-hdd"
 }
 
 variable "platform_id" {

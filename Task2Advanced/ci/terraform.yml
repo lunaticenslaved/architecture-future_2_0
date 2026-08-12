@@ -50,6 +50,9 @@ env:
   # Working directory of the root config.
   TF_WORKING_DIR: Task2Advanced
   TF_VERSION: "1.9.5"
+  # Use Yandex mirror to avoid 503 errors from registry.terraform.io / github.com.
+  # The .terraformrc in the repo root configures the mirror for all providers.
+  TF_CLI_CONFIG_FILE: ${{ github.workspace }}/.terraformrc
   # Backend access keys — mapped from Yandex Object Storage static access key.
   # The s3 backend reads these standard AWS SDK env vars at `init` time.
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -66,6 +69,12 @@ jobs:
   plan:
     name: fmt / init / validate / plan
     runs-on: ubuntu-latest
+    # Runs under the `production` environment so it can access environment-scoped
+    # variables (TF_STATE_BUCKET, TF_STATE_KEY, TF_STATE_REGION, TF_STATE_ENDPOINT).
+    # If `production` has required reviewers, remove them or add a separate
+    # "plan-only" environment without protection rules.
+    environment:
+      name: production
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -84,13 +93,17 @@ jobs:
 
       # 2) Initialize with the REMOTE backend. Non-secret connection details
       #    come from CI variables; keys come from AWS_* env vars above.
+      #    We write a temp backend.hcl because `-backend-config` CLI flags
+      #    cannot pass the `endpoints` object — only HCL files support it.
       - name: terraform init
         run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
-            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
-            -backend-config="endpoints={s3=\"${{ vars.TF_STATE_ENDPOINT }}\"}"
+          cat > backend.hcl <<EOF
+          bucket    = "${{ vars.TF_STATE_BUCKET }}"
+          key       = "${{ vars.TF_STATE_KEY }}"
+          region    = "${{ vars.TF_STATE_REGION }}"
+          endpoints = { s3 = "${{ vars.TF_STATE_ENDPOINT }}" }
+          EOF
+          terraform init -input=false -backend-config=backend.hcl
 
       # 3) Static validation of the configuration.
       - name: terraform validate
@@ -135,11 +148,13 @@ jobs:
 
       - name: terraform init
         run: |
-          terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
-            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
-            -backend-config="endpoints={s3=\"${{ vars.TF_STATE_ENDPOINT }}\"}"
+          cat > backend.hcl <<EOF
+          bucket    = "${{ vars.TF_STATE_BUCKET }}"
+          key       = "${{ vars.TF_STATE_KEY }}"
+          region    = "${{ vars.TF_STATE_REGION }}"
+          endpoints = { s3 = "${{ vars.TF_STATE_ENDPOINT }}" }
+          EOF
+          terraform init -input=false -backend-config=backend.hcl
 
       # Reuse the reviewed plan produced by the plan job.
       - name: Download plan artifact

@@ -5,6 +5,10 @@
 # variables. No environment-specific literals live here.
 ###############################################################################
 
+data "yandex_compute_image" "os_image" {
+  family = var.image_family
+}
+
 resource "yandex_compute_instance" "this" {
   name        = var.name
   zone        = var.zone
@@ -19,9 +23,9 @@ resource "yandex_compute_instance" "this" {
 
   boot_disk {
     initialize_params {
-      image_id = var.image_id
-      size     = var.disk_size
-      type     = var.disk_type
+      image_id = data.yandex_compute_image.os_image.id
+      size     = 20
+      type     = "network-hdd"
     }
   }
 

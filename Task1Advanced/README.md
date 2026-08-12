@@ -12,21 +12,22 @@ Task1Advanced/
 
 ## Параметры по средам
 
-| Параметр      | dev         | stage       | prod        |
-|---------------|-------------|-------------|-------------|
-| cores         | 2           | 4           | 8           |
-| memory (ГБ)   | 2           | 8           | 32          |
-| core_fraction | 20          | 100         | 100         |
-| disk_size (ГБ)| 20          | 50          | 200         |
-| disk_type     | network-hdd | network-hdd | network-ssd |
-| preemptible   | true        | false       | false       |
-| nat           | true        | true        | false       |
+| Параметр      | dev              | stage            | prod             |
+|---------------|------------------|------------------|------------------|
+| cores         | 2                | 4                | 8                |
+| memory (ГБ)   | 2                | 8                | 32               |
+| core_fraction | 20               | 100              | 100              |
+| image_family  | ubuntu-2204-lts  | ubuntu-2204-lts  | ubuntu-2204-lts  |
+| preemptible   | true             | false            | false            |
+| nat           | true             | true             | false            |
+
+> Загрузочный диск (размер и тип) задан внутри модуля и одинаков для всех сред; образ ОС выбирается по семейству (`image_family`) — берётся последний актуальный образ.
 
 ## Предварительные требования
 
 - Terraform `>= 1.3`.
 - Аутентификация в Yandex Cloud (токен или ключ сервисного аккаунта).
-- Замените каждый placeholder `*REPLACE_ME*` в целевом `terraform.tfvars` (`cloud_id`, `folder_id`, `subnet_id`, `image_id`, `ssh_public_key`).
+- Замените каждый placeholder `*REPLACE_ME*` в целевом `terraform.tfvars` (`cloud_id`, `folder_id`, `subnet_id`, `ssh_public_key`).
 
 ## Развёртывание
 

@@ -8,10 +8,10 @@ terraform {
     }
   }
 
-backend "s3" {
-    bucket   = "my-tfstate-bucket"
-    key      = "terraform/state/prod.tfstate"
-    region   = "ru-central1"
+  backend "s3" {
+    bucket    = "lunaticenslaved-test"
+    key       = "terraform-state/dev.tfstate"
+    region    = "ru-central1"
     endpoints = { s3 = "https://storage.yandexcloud.net" }
 
     # Flags required for any non-AWS S3-compatible backend. They tell the AWS
@@ -25,10 +25,12 @@ backend "s3" {
 }
 
 provider "yandex" {
-  token                    = var.yc_token
-  service_account_key_file = var.yc_service_account_key_file
+  endpoint         = "api.cloud.yandex.net:443"
+  storage_endpoint = "storage.yandexcloud.net"
 
+  token     = var.yc_token
   cloud_id  = var.cloud_id
   folder_id = var.folder_id
   zone      = var.zone
 }
+

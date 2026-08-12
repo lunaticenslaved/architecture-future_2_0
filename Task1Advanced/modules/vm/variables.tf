@@ -46,29 +46,13 @@ variable "memory" {
   }
 }
 
-variable "disk_size" {
-  type        = number
-  description = "Size of the boot disk in GB."
+variable "image_family" {
+  type        = string
+  description = "Family of the OS image used to initialize the boot disk (e.g. ubuntu-2204-lts). The latest image in the family is resolved automatically."
 
   validation {
-    condition     = var.disk_size > 0
-    error_message = "disk_size (GB) must be greater than 0."
-  }
-}
-
-variable "disk_type" {
-  type        = string
-  description = "Type of the boot disk (e.g. network-hdd, network-ssd)."
-  default     = "network-hdd"
-}
-
-variable "image_id" {
-  type        = string
-  description = "ID of the OS image used to initialize the boot disk."
-
-  validation {
-    condition     = length(var.image_id) > 0
-    error_message = "image_id must not be empty."
+    condition     = length(var.image_family) > 0
+    error_message = "image_family must not be empty."
   }
 }
 

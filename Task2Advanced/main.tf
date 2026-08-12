@@ -16,9 +16,7 @@ module "vm" {
   memory        = var.memory
   core_fraction = var.core_fraction
 
-  disk_size = var.disk_size
-  disk_type = var.disk_type
-  image_id  = var.image_id
+  image_family = var.image_family
 
   subnet_id = var.subnet_id
   nat       = var.nat
