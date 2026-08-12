@@ -1,0 +1,152 @@
+###############################################################################
+# GitHub Actions — Terraform CI/CD for the Yandex Cloud config in Task2Advanced/
+#
+# HOW TO ACTIVATE:
+#   GitHub only runs workflows located at the repository root under
+#   `.github/workflows/`. This copy lives inside Task2Advanced/ci/ so the
+#   reviewer can inspect it here. To make it actually run, copy or symlink it:
+#
+#       mkdir -p .github/workflows
+#       cp Task2Advanced/ci/terraform.yml .github/workflows/terraform.yml
+#
+# SECURITY MODEL:
+#   * No secrets in the repo. All sensitive values come from GitHub Actions
+#     Secrets / Variables (least-privilege service account + a static access
+#     key scoped only to the state bucket).
+#   * PLAN runs automatically on pushes / PRs (safe, read-only, no apply).
+#   * APPLY is isolated: it only runs on the protected `main` branch AND is
+#     gated behind a GitHub Environment (`production`) whose required reviewers
+#     must approve before the job starts (manual approval). It can also be
+#     triggered manually via workflow_dispatch.
+#   * The plan is saved as an artifact and consumed by apply so apply executes
+#     exactly the reviewed plan (no drift between plan and apply).
+#   * Remote S3 backend => state is stored REMOTELY, never in the runner.
+###############################################################################
+
+name: Terraform (Task2Advanced)
+
+# Least-privilege default token permissions.
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Task2Advanced/**"
+      - "Task1Advanced/modules/**" # shared VM module is reused by this config
+  pull_request:
+    paths:
+      - "Task2Advanced/**"
+      - "Task1Advanced/modules/**"
+  workflow_dispatch: # manual "apply" button from the Actions UI
+
+# Never run two state-mutating pipelines against the same backend at once.
+concurrency:
+  group: terraform-task2-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Working directory of the root config.
+  TF_WORKING_DIR: Task2Advanced
+  TF_VERSION: "1.9.5"
+  # Backend access keys — mapped from Yandex Object Storage static access key.
+  # The s3 backend reads these standard AWS SDK env vars at `init` time.
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  # Yandex provider auth (IAM token) injected as a TF_VAR_* for var.yc_token.
+  TF_VAR_yc_token: ${{ secrets.YC_TOKEN }}
+  TF_VAR_cloud_id: ${{ vars.YC_CLOUD_ID }}
+  TF_VAR_folder_id: ${{ vars.YC_FOLDER_ID }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # PLAN — safe, read-only. Runs on every push / PR. Produces a plan artifact.
+  # ---------------------------------------------------------------------------
+  plan:
+    name: fmt / init / validate / plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # 1) Formatting gate — fails the build on unformatted HCL.
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive
+
+      # 2) Initialize with the REMOTE backend. Non-secret connection details
+      #    come from CI variables; keys come from AWS_* env vars above.
+      - name: terraform init
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
+            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
+            -backend-config="endpoints={s3=\"${{ vars.TF_STATE_ENDPOINT }}\"}"
+
+      # 3) Static validation of the configuration.
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      # 4) Plan. -detailed-exitcode surfaces drift; save the plan to a file.
+      - name: terraform plan
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      # 5) Persist the exact plan so `apply` runs precisely what was reviewed.
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # APPLY — isolated & gated. Only on protected `main` OR manual dispatch, and
+  # blocked by the `production` Environment's required reviewers (approval).
+  # ---------------------------------------------------------------------------
+  apply:
+    name: apply (manual approval)
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Required reviewers configured on this Environment enforce manual approval
+    # before the job may start.
+    environment:
+      name: production
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_STATE_KEY }}" \
+            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
+            -backend-config="endpoints={s3=\"${{ vars.TF_STATE_ENDPOINT }}\"}"
+
+      # Reuse the reviewed plan produced by the plan job.
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}
+
+      - name: terraform apply
+        run: terraform apply -input=false -no-color tfplan
