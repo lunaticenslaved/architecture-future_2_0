@@ -1,0 +1,35 @@
+@startuml 05-component-fintech
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Component Diagram — пилотный домен Финтех (финансовые расчёты)
+
+Person(client, "Клиент финтех", "Финансовые операции")
+
+Container_Boundary(fintech, "Сервис Финтех / Банкинг") {
+    Component(paymentProd, "Продюсер платёжных событий", "Golang", "Публикует события платежей в топики")
+    Component(calc, "Сервис финансовых расчётов", "Java", "Расчёты, начисления, проценты")
+    Component(risk, "Сервис кредитного риска", "Python", "Оценка риска на потоке событий")
+    Component(dlqConsumer, "DLQ-обработчик", "Golang", "Повторы и разбор недоставленных сообщений")
+    Component(aclAdapter, "ACL-адаптер к DWH", "Adapter", "Изоляция legacy на период миграции")
+}
+
+ContainerQueue(topics, "Топики Kafka", "Kafka", "Схемо-валидируемые топики платежей и расчётов")
+Container(registry, "Schema Registry", "Avro", "Контракты событий")
+ContainerQueue(dlq, "DLQ", "Kafka", "Недоставленные сообщения")
+Container(flink, "Stream Processing", "Flink", "Агрегации для потоковых витрин")
+ContainerDb(dwh, "Legacy DWH", "MS SQL Server 2008", "Временный источник")
+
+Rel(client, paymentProd, "Инициирует платёж", "HTTPS")
+Rel(paymentProd, topics, "Публикует события", "Kafka")
+Rel(topics, registry, "Валидация схемы", "HTTP")
+Rel(topics, calc, "Потребляет события", "Kafka")
+Rel(topics, risk, "Потребляет события", "Kafka")
+Rel(calc, topics, "Публикует результаты", "Kafka")
+Rel(topics, dlq, "Ошибки обработки", "Kafka")
+Rel(dlq, dlqConsumer, "Разбор и повтор", "Kafka")
+Rel(topics, flink, "Потоки для витрин", "Kafka")
+Rel(aclAdapter, dwh, "Чтение legacy-данных", "SQL")
+Rel(aclAdapter, topics, "Нормализованные события", "Kafka")
+
+LAYOUT_WITH_LEGEND()
+@enduml

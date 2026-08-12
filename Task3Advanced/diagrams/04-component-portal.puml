@@ -1,0 +1,36 @@
+@startuml 04-component-portal
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Component Diagram — Self-service витрина данных
+
+Person(analyst, "Аналитик / бизнес-пользователь", "Отчёты по срезам в рамках доступа")
+
+Container_Boundary(portal, "Портал-витрина данных") {
+    Component(apigw, "API Gateway", "Kong/Envoy", "Маршрутизация, rate-limiting, единая точка входа")
+    Component(authz, "Сервис авторизации", "OPA + Keycloak", "RBAC/ABAC по уровню доступа пользователя")
+    Component(builder, "Конструктор отчётов", "React", "UI построения кастомных отчётов по любому срезу")
+    Component(semantic, "Семантический слой метрик", "Cube.dev/dbt", "Единые метрики и измерения")
+    Component(query, "Query Engine", "Trino/ClickHouse", "Исполнение аналитических запросов")
+    Component(connectors, "Коннекторы витрин", "SQL/API", "Подключение датасетов и потоковых витрин")
+    Component(cache, "Кэш результатов", "Redis", "Кэширование частых запросов и агрегатов")
+    Component(audit, "Аудит-логирование", "Kafka producer", "Журналирование доступа и запросов")
+}
+
+ContainerDb(adwh, "Аналитический DWH", "ClickHouse", "Целевые витрины")
+Container(iam, "IAM / Identity", "Keycloak", "Аутентификация")
+ContainerQueue(kafka, "Apache Kafka", "Kafka", "Топик аудита")
+
+Rel(analyst, apigw, "Запросы отчётов", "HTTPS")
+Rel(apigw, authz, "Проверка прав", "gRPC")
+Rel(authz, iam, "Токены и роли", "OIDC")
+Rel(apigw, builder, "Отдаёт UI конструктора", "HTTP")
+Rel(builder, semantic, "Определения метрик", "API")
+Rel(semantic, query, "Компиляция в SQL", "SQL")
+Rel(query, connectors, "Обращение к датасетам", "SQL")
+Rel(connectors, adwh, "Чтение витрин", "ClickHouse SQL")
+Rel(query, cache, "Чтение/запись кэша", "Redis")
+Rel(apigw, audit, "События доступа", "async")
+Rel(audit, kafka, "Пишет аудит", "Kafka")
+
+LAYOUT_WITH_LEGEND()
+@enduml
