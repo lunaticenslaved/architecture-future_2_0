@@ -1,0 +1,162 @@
+@startuml event-storming
+' Event Storming «Будущее 2.0»: команда -> агрегат -> событие -> политика -> подписчик
+' Цветовая нотация (канон Event Storming):
+'   события  (Domain Event) — оранжевые #FFB84D
+'   команды  (Command)      — синие     #4DA6FF
+'   агрегаты (Aggregate)    — жёлтые    #FFE680
+'   политики (Policy)       — сиреневые #C299FF
+'   внешние систем/read-model — зелёные #9BE7B4
+
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam rectangle {
+  BorderColor #33475b
+  FontColor #1b2733
+}
+
+' ==== Макросы элементов ====
+!define CMD(alias,label)    rectangle "label" as alias #4DA6FF
+!define AGG(alias,label)    rectangle "label" as alias #FFE680
+!define EVT(alias,label)    rectangle "label" as alias #FFB84D
+!define POL(alias,label)    rectangle "label" as alias #C299FF
+!define EXT(alias,label)    rectangle "label" as alias #9BE7B4
+
+title Event Storming «Будущее 2.0» — команды, агрегаты, события, политики, подписчики
+
+' =========================================================
+' Сценарий 1: Регистрация пациента -> ИИ-исследование -> биллинг
+' =========================================================
+package "Клиники / Пациентский поток" #FFF7E6 {
+  EXT(operator, "Оператор клиники\n<<external>>")
+  CMD(cRegister, "RegisterPatient\n<<command>>")
+  AGG(aPatient, "PatientRegistration\n<<aggregate>>")
+  EVT(ePatientReg, "PatientRegistered\n<<event>>")
+  CMD(cSchedule, "ScheduleAppointment\n<<command>>")
+  AGG(aAppt, "PatientRegistration/Appt\n<<aggregate>>")
+  EVT(eApptSched, "AppointmentScheduled\n<<event>>")
+}
+
+package "Медицинский ИИ" #F3E8FE {
+  POL(pRequestStudy, "Политика:\nназначить ИИ-исследование\n<<policy>>")
+  CMD(cRequestStudy, "RequestAiStudy\n<<command>>")
+  AGG(aStudy, "AiStudy\n<<aggregate>>")
+  EVT(eStudyReq, "AiStudyRequested\n<<event>>")
+  EVT(eStudyDone, "AiStudyCompleted\n<<event>>")
+}
+
+package "Финтех / Банкинг" #E9F7EF {
+  POL(pBill, "Политика:\nвыставить инвойс\n<<policy>>")
+  CMD(cIssueInvoice, "IssueInvoice\n<<command>>")
+  AGG(aBilling, "Account/Billing\n<<aggregate>>")
+  EVT(eInvoice, "InvoiceIssued\n<<event>>")
+  CMD(cOpenAcc, "OpenAccount\n<<command>>")
+  AGG(aAccount, "Account\n<<aggregate>>")
+  EVT(eAccOpen, "AccountOpened\n<<event>>")
+  CMD(cCreateCredit, "CreateCreditContract\n<<command>>")
+  AGG(aCredit, "CreditContract\n<<aggregate>>")
+  EVT(eCredit, "CreditContractCreated\n<<event>>")
+  CMD(cRepay, "RegisterRepayment\n<<command>>")
+  EVT(ePayment, "PaymentProcessed\n<<event>>")
+  EVT(eRepay, "LoanRepaymentReceived\n<<event>>")
+  POL(pRisk, "Политика:\nпересчитать риск-профиль\n<<policy>>")
+}
+
+package "Медтехника / IoT" #E8F5FE {
+  EXT(deviceExt, "Устройство медтехники\n<<external>>")
+  CMD(cRegDevice, "RegisterDevice\n<<command>>")
+  AGG(aDevice, "Device\n<<aggregate>>")
+  EVT(eDevReg, "DeviceRegistered\n<<event>>")
+  EVT(eTelemetry, "DeviceTelemetryReceived\n<<event>>")
+  POL(pAlert, "Политика:\nсформировать алерт клинике\n<<policy>>")
+}
+
+package "Фарма" #FDE8EC {
+  CMD(cDispatch, "DispatchDrugShipment\n<<command>>")
+  AGG(aShip, "DrugShipment\n<<aggregate>>")
+  EVT(eDispatch, "DrugShipmentDispatched\n<<event>>")
+  EVT(eDeliver, "DrugShipmentDelivered\n<<event>>")
+}
+
+package "Головной офис / MDM + IAM" #E8F0FE {
+  AGG(aProfile, "CustomerProfile\n<<aggregate>>")
+  EVT(eProfile, "CustomerProfileUpdated\n<<event>>")
+  EVT(eConsent, "ConsentGranted\n<<event>>")
+  POL(pLink, "Политика:\nсвязать/обновить профиль\n<<policy>>")
+}
+
+package "Аналитика / Витрина (без медданных)" #EFEFEF {
+  EXT(mart, "Потоковые витрины\n<<read-model>>")
+}
+
+' ==== Поток сценария 1 ====
+operator --> cRegister
+cRegister --> aPatient
+aPatient --> ePatientReg
+ePatientReg --> pRequestStudy
+pRequestStudy --> cRequestStudy
+cRequestStudy --> aStudy
+aStudy --> eStudyReq
+aStudy --> eStudyDone
+ePatientReg --> cSchedule
+cSchedule --> aAppt
+aAppt --> eApptSched
+eStudyDone --> pBill
+eApptSched --> pBill
+pBill --> cIssueInvoice
+cIssueInvoice --> aBilling
+aBilling --> eInvoice
+
+' ==== Поток сценария 2: счёт -> кредит -> платёж -> риск ====
+cOpenAcc --> aAccount
+aAccount --> eAccOpen
+cCreateCredit --> aCredit
+aCredit --> eCredit
+cRepay --> aCredit
+aCredit --> eRepay
+aAccount --> ePayment
+eRepay --> pRisk
+ePayment --> pRisk
+
+' ==== Поток сценария 3: устройство/телеметрия + поставка ====
+deviceExt --> cRegDevice
+cRegDevice --> aDevice
+aDevice --> eDevReg
+aDevice --> eTelemetry
+eTelemetry --> pAlert
+pAlert --> aAppt
+cDispatch --> aShip
+aShip --> eDispatch
+aShip --> eDeliver
+eDispatch --> aAppt
+
+' ==== MDM / Consent ====
+ePatientReg --> pLink
+eAccOpen --> pLink
+pLink --> aProfile
+aProfile --> eProfile
+aProfile --> eConsent
+eConsent --> aPatient
+
+' ==== Подписка Аналитики (Conformist, без медданных) ====
+ePatientReg ..> mart
+eApptSched ..> mart
+eStudyDone ..> mart : только метаданные
+eCredit ..> mart
+ePayment ..> mart
+eInvoice ..> mart
+eTelemetry ..> mart
+eDispatch ..> mart
+eProfile ..> mart
+
+legend right
+  == Легенда Event Storming ==
+  <back:#4DA6FF>  </back> Команда (Command)
+  <back:#FFE680>  </back> Агрегат (Aggregate)
+  <back:#FFB84D>  </back> Доменное событие (Event)
+  <back:#C299FF>  </back> Политика/реакция (Policy)
+  <back:#9BE7B4>  </back> Внешняя система / read-model
+  --> поток команда/агрегат/событие/политика
+  ..> асинхронная подписка (Kafka), Аналитика — без медданных
+endlegend
+
+@enduml
