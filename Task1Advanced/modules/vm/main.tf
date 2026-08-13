@@ -14,6 +14,7 @@ resource "yandex_compute_instance" "this" {
   zone        = var.zone
   platform_id = var.platform_id
   labels      = var.labels
+  folder_id   = var.folder_id
 
   resources {
     cores         = var.cores

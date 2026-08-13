@@ -1,4 +1,4 @@
-# Never commit local state — state lives REMOTELY in the S3 backend.
-*.tfstate
 *.tfstate.*
+*.terraform
+
 .env

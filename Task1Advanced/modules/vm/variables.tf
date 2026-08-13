@@ -6,6 +6,16 @@
 # variable so the same module can be reused across dev / stage / prod.
 ###############################################################################
 
+variable "folder_id" {
+  type        = string
+  description = "Yandex Cloud folder ID where the instance will be created."
+
+  validation {
+    condition     = length(var.folder_id) > 0
+    error_message = "folder_id must not be empty."
+  }
+}
+
 variable "name" {
   type        = string
   description = "Name of the compute instance (VM)."

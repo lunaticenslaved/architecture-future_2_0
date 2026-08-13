@@ -37,7 +37,7 @@ Task1Advanced/
 cd Task1Advanced/envs/dev
 
 # аутентификация: токен через переменную окружения либо задайте yc_service_account_key_file в tfvars
-export TF_VAR_yc_token="$(yc iam create-token)"
+export YC_TOKEN="$(yc iam create-token)"
 
 terraform init
 terraform apply -var-file=terraform.tfvars

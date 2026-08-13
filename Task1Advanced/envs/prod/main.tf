@@ -8,6 +8,8 @@
 module "vm" {
   source = "../../modules/vm"
 
+  folder_id = var.folder_id
+
   name = var.vm_name
   zone = var.zone
 
