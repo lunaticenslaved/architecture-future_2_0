@@ -1,0 +1,119 @@
+@startuml bounded-contexts
+' Context Map «Будущее 2.0» — bounded contexts и типы связей DDD
+' Легенда типов связей: PL — Published Language, CS — Customer-Supplier,
+' C — Conformist, ACL — Anti-Corruption Layer, OHS — Open Host Service,
+' P — Partnership, SK — Shared Kernel
+
+skinparam rectangle {
+  BorderColor #33475b
+  FontColor #1b2733
+}
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Sans
+
+title Context Map «Будущее 2.0» — bounded contexts и связи DDD
+
+' ==== Сквозные (upstream) контексты ====
+package "Головной офис / Корпоративный" as CORP #E8F0FE {
+  rectangle "MDM: Профиль клиента\n<<OHS + Published Language>>" as MDM
+  rectangle "HR / Финансы / Инвентарь" as HRFI
+}
+
+package "IAM / Идентичность (сквозной)" as IAM #E8F0FE {
+  rectangle "Идентичность и доступ\n(RBAC/ABAC)\n<<OHS>>" as IDN
+  rectangle "Согласия / Consent\n<<Published Language>>" as CONSENT
+}
+
+' ==== Продуктовые домены ====
+package "Клиники / Пациентский поток" as CLIN #FFF7E6 {
+  rectangle "Регистрация пациента" as REG
+  rectangle "Приёмы / Назначения" as APPT
+  rectangle "Медкарта (вне аналитики)" as EMR
+}
+
+package "Финтех / Банкинг" as FIN #E9F7EF {
+  rectangle "Счета / Платежи" as ACC
+  rectangle "Кредиты / Кредитный риск" as CREDIT
+  rectangle "Биллинг медуслуг" as BILL
+}
+
+package "Медицинский ИИ" as AI #F3E8FE {
+  rectangle "Инференс / Исследования" as INFER
+  rectangle "Каталог ИИ-моделей" as MODELS
+}
+
+package "Фарма" as PHARMA #FDE8EC {
+  rectangle "Каталог препаратов" as DRUGCAT
+  rectangle "Поставки / Дистрибуция" as SHIP
+}
+
+package "Медтехника / IoT" as IOT #E8F5FE {
+  rectangle "Реестр устройств" as DEVREG
+  rectangle "Телеметрия" as TELE
+}
+
+package "Аналитика / Витрина (сквозной)" as ANALYTICS #EFEFEF {
+  rectangle "Потоковые витрины\n(без медданных)\n<<Conformist>>" as MART
+  rectangle "Семантический слой" as SEMANTIC
+}
+
+' ==== Legacy ACL-мосты (временные, вывод к стадии 3) ====
+package "Legacy-мосты (временные, вывод к стадии 3)" as LEGACY #F2F2F2 {
+  rectangle "ACL над DWH\n(MS SQL 2008)" as ACLDWH
+  rectangle "ACL над Camel ESB" as ACLESB
+}
+
+' ==== Связи между контекстами (тип отношения DDD на стрелке) ====
+
+' MDM — единый источник профиля клиента для продуктовых доменов (U -> D)
+MDM --> REG    : "Published Language\n(профиль клиента)"
+MDM --> ACC    : "Published Language\n(профиль клиента)"
+MDM --> DRUGCAT: "Published Language"
+
+' IAM — сквозной OHS для всех доменов
+IDN --> CLIN   : "OHS (RBAC/ABAC)"
+IDN --> FIN    : "OHS (RBAC/ABAC)"
+IDN --> AI     : "OHS (RBAC/ABAC)"
+CONSENT --> AI : "Published Language\n(Consent)"
+CONSENT --> ANALYTICS : "Published Language\n(Consent)"
+
+' Клиники <-> Медицинский ИИ — Partnership (совместный клинический поток)
+APPT <--> INFER : "Partnership"
+INFER --> APPT  : "Customer-Supplier\n(результат исследования)"
+
+' Медицинский ИИ -> Финтех — Customer-Supplier (биллинг ИИ-услуг)
+INFER --> BILL  : "Customer-Supplier\n(событие исследования)"
+APPT --> BILL   : "Customer-Supplier\n(оказанная услуга)"
+
+' Фарма -> Клиники — Customer-Supplier (поставка препаратов)
+SHIP --> APPT   : "Customer-Supplier\n(поставка препарата)"
+
+' Медтехника/IoT -> Клиники — Customer-Supplier (телеметрия/алерты)
+TELE --> APPT   : "Customer-Supplier\n(телеметрия/алерт)"
+
+' Аналитика — Conformist: подписывается на события доменов «как есть»
+CLIN ..> MART   : "Conformist (события,\nбез медданных)"
+FIN ..> MART    : "Conformist (события)"
+AI ..> MART     : "Conformist (метаданные,\nбез результатов)"
+PHARMA ..> MART : "Conformist (события)"
+IOT ..> MART    : "Conformist (телеметрия)"
+
+' Legacy ACL-мосты — временная изоляция legacy, нормализация в события
+ACLDWH ..> MDM  : "ACL -> нормализованные\nсобытия"
+ACLDWH ..> ANALYTICS : "ACL (историч. данные)"
+ACLESB ..> FIN  : "ACL (legacy-интеграции)"
+ACLESB ..> CLIN : "ACL (legacy-интеграции)"
+
+legend right
+  == Типы связей DDD ==
+  Partnership — совместная эволюция контрактов
+  Customer-Supplier — upstream диктует, downstream заказывает
+  Conformist — downstream принимает модель upstream «как есть»
+  ACL — Anti-Corruption Layer (изоляция legacy, временный мост)
+  OHS — Open Host Service (стабильный опубликованный API)
+  Published Language — общий язык/контракт обмена
+  ..> пунктир — асинхронная подписка на события (Kafka)
+endlegend
+
+@enduml

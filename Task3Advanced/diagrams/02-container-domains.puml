@@ -1,0 +1,61 @@
+@startuml 02-container-domains
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Container Diagram (A) — доменные сервисы и событийная магистраль
+
+Person(operator, "Оператор клиники", "Поток пациентов")
+Person(doctor, "Врач", "Доменный UI")
+Person(client, "Клиент финтех", "Финансовые продукты")
+System_Ext(device, "Производитель медтехники", "Телеметрия IoT")
+
+System_Boundary(domains, "Доменные сервисы (Data Mesh)") {
+    Container(clinicUI, "UI Клиник / Поток пациентов", "React", "Заменяет Power Builder; управление приёмами и потоком пациентов")
+    Container(clinicSvc, "Сервис Клиник", "Java/Go", "Домен клиник, публикует события потока пациентов")
+    Container(fintechSvc, "Сервис Финтех / Банкинг", "Golang/Java", "Финансовые расчёты, платежи, кредитный риск")
+    Container(aiSvc, "Сервис Медицинского ИИ", "Python", "ML-инференс, монетизируемые ИИ-сервисы")
+    Container(pharmaSvc, "Сервис Фарма", "Java", "Новый домен: данные о препаратах и исследованиях")
+    Container(iotSvc, "IoT Gateway медтехники", "Go", "Новый домен: приём телеметрии устройств")
+    Container(corpSvc, "Корпоративный сервис", "Java", "Головной офис: HR, финансы, инвентарь")
+}
+
+System_Boundary(backbone, "Событийная магистраль") {
+    ContainerQueue(kafka, "Apache Kafka", "Kafka", "Центральный event backbone: топики доменных событий")
+    Container(registry, "Schema Registry", "Confluent/Avro", "Каталог и версионирование схем событий")
+    ContainerQueue(dlq, "DLQ", "Kafka", "Очереди недоставленных сообщений")
+    Container(flink, "Stream Processing", "Apache Flink", "Обработка потоков, агрегации, наполнение витрин")
+}
+
+System_Boundary(legacy, "Legacy-мосты (временные, вывод к стадии 3)") {
+    Container(cdc, "CDC", "Debezium", "Change-Data-Capture из legacy-источников в Kafka")
+    Container(aclDwh, "ACL DWH", "Adapter", "Anti-Corruption Layer над MS SQL Server 2008")
+    Container(aclEsb, "ACL Camel", "Adapter", "Anti-Corruption Layer над шиной Apache Camel")
+    ContainerDb(dwh, "Legacy DWH", "MS SQL Server 2008", "Временный источник; выводится к стадии 3")
+    Container(esb, "Apache Camel ESB", "Camel", "Временная шина; выводится к стадии 3")
+}
+
+Rel(operator, clinicUI, "Работает", "HTTPS")
+Rel(doctor, clinicUI, "Работает", "HTTPS")
+Rel(client, fintechSvc, "Операции", "HTTPS")
+Rel(device, iotSvc, "Телеметрия", "MQTT")
+
+Rel(clinicUI, clinicSvc, "Вызовы", "REST")
+Rel(clinicSvc, kafka, "Публикует события", "Kafka")
+Rel(fintechSvc, kafka, "Публикует/читает", "Kafka")
+Rel(aiSvc, kafka, "Публикует/читает", "Kafka")
+Rel(pharmaSvc, kafka, "Публикует/читает", "Kafka")
+Rel(iotSvc, kafka, "Публикует телеметрию", "Kafka")
+Rel(corpSvc, kafka, "Публикует/читает", "Kafka")
+
+Rel(kafka, registry, "Валидация схем", "HTTP")
+Rel(kafka, dlq, "Недоставленные", "Kafka")
+Rel(kafka, flink, "Потоки событий", "Kafka")
+
+Rel(cdc, dwh, "Читает изменения", "CDC")
+Rel(cdc, kafka, "События изменений", "Kafka")
+Rel(aclDwh, dwh, "Изоляция legacy", "SQL")
+Rel(aclEsb, esb, "Изоляция legacy", "Camel")
+Rel(aclDwh, kafka, "Публикует нормализованные события", "Kafka")
+Rel(aclEsb, kafka, "Публикует нормализованные события", "Kafka")
+
+LAYOUT_WITH_LEGEND()
+@enduml

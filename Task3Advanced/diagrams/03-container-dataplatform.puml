@@ -1,0 +1,50 @@
+@startuml 03-container-dataplatform
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Container Diagram (B) — дата-платформа, витрина и сквозные сервисы
+
+Person(analyst, "Аналитик / бизнес-пользователь", "Строит отчёты по любому срезу в рамках доступа")
+System_Ext(regulator, "Регуляторы", "ЦБ и здравоохранение")
+
+System_Boundary(dataplatform, "Облачная дата-платформа") {
+    ContainerDb(lake, "Data Lakehouse", "S3 / Parquet / Iceberg", "Объектное хранилище сырых и подготовленных данных")
+    ContainerDb(adwh, "Аналитический DWH", "ClickHouse", "Колоночное хранилище, целевые витрины")
+    Container(marts, "Потоковые витрины", "Materialized Views", "Near-real-time витрины на потоках")
+    Container(catalog, "Каталог данных и Governance", "DataHub/OpenMetadata", "Метаданные, lineage, data governance")
+}
+
+System_Boundary(portal, "Self-service витрина данных") {
+    Container(portalApp, "Портал-витрина", "Next.js", "Отчёт по любому срезу и конструктор отчётов; исключает мед. карты/истории/исследования")
+    Container(semantic, "Семантический слой метрик", "dbt / Cube.dev", "Единые метрики; миграция кастомизаций Power BI")
+}
+
+System_Boundary(cross, "Сквозные сервисы") {
+    Container(iam, "IAM / Identity", "Keycloak", "Аутентификация, RBAC/ABAC по уровню доступа")
+    Container(secrets, "Управление секретами", "Vault", "Секреты, ключи, ротация")
+    Container(obs, "Наблюдаемость", "Prometheus/Grafana/OTel", "Метрики, логи, трейсы, SLO")
+}
+
+ContainerQueue(kafka2, "Apache Kafka", "Kafka", "Event backbone (см. диаграмму A)")
+Container(flink2, "Stream Processing", "Apache Flink", "Обработка потоков (см. диаграмму A)")
+
+Rel(flink2, lake, "Пишет сырые/подготовленные данные", "S3")
+Rel(flink2, marts, "Обновляет потоковые витрины", "SQL")
+Rel(marts, adwh, "Материализация", "SQL")
+Rel(lake, adwh, "Загрузка в аналитический DWH", "Batch/Stream")
+Rel(catalog, lake, "Индексирует и lineage", "API")
+Rel(catalog, adwh, "Индексирует и lineage", "API")
+
+Rel(analyst, portalApp, "Строит отчёты", "HTTPS")
+Rel(portalApp, semantic, "Запрос метрик", "API")
+Rel(semantic, adwh, "Выполняет запросы", "ClickHouse SQL")
+Rel(portalApp, iam, "Аутентификация/авторизация", "OIDC")
+
+Rel(regulator, portalApp, "Регуляторная отчётность", "API")
+
+Rel(iam, secrets, "Хранит секреты", "API")
+Rel(obs, portalApp, "Мониторинг", "OTel")
+Rel(obs, flink2, "Мониторинг", "OTel")
+Rel(kafka2, flink2, "Потоки событий", "Kafka")
+
+LAYOUT_WITH_LEGEND()
+@enduml

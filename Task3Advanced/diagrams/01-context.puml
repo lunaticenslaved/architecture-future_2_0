@@ -1,0 +1,27 @@
+@startuml 01-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Диаграмма контекста — платформа «Будущее 2.0»
+
+Person(operator, "Оператор клиники", "Регистрирует приёмы, ведёт поток пациентов")
+Person(doctor, "Врач", "Работает с медицинскими данными в доменном UI")
+Person(client, "Клиент банка/финтех", "Пользуется финансовыми продуктами")
+Person(analyst, "Аналитик / бизнес-пользователь", "Строит отчёты в self-service витрине")
+
+System(platform, "Событийная платформа Будущее 2.0", "Доменные сервисы, event backbone, дата-платформа и self-service витрина")
+
+System_Ext(regulator, "Регуляторы", "ЦБ и органы здравоохранения, получают регуляторную отчётность")
+System_Ext(pharma, "Фарма-партнёры", "Обмен данными о препаратах и исследованиях")
+System_Ext(device, "Производитель медтехники", "Поставляет телеметрию устройств IoT")
+
+Rel(operator, platform, "Ведёт поток пациентов", "HTTPS")
+Rel(doctor, platform, "Работает с доменным UI", "HTTPS")
+Rel(client, platform, "Финансовые операции", "HTTPS")
+Rel(analyst, platform, "Строит отчёты и витрины", "HTTPS")
+
+Rel(platform, regulator, "Регуляторная отчётность", "API")
+Rel(pharma, platform, "Данные о препаратах", "Events/API")
+Rel(device, platform, "Телеметрия устройств", "MQTT/Events")
+
+LAYOUT_WITH_LEGEND()
+@enduml
